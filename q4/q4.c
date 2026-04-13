@@ -15,7 +15,8 @@ int main(void)
     char op[8];          /* op is at most 5 characters + NUL */
     int  num1, num2;
 
-    while (scanf("%s %d %d", op, &num1, &num2) == 3) {
+    /* Securely read up to 5 characters for the operation */
+    while (scanf("%5s %d %d", op, &num1, &num2) == 3) {
 
         /* Build library path: ./lib<op>.so */
         char libpath[24];                       /* ./lib + 5 + .so + NUL = 14 max */
@@ -23,12 +24,18 @@ int main(void)
 
         /* Load the shared library */
         void *handle = dlopen(libpath, RTLD_LAZY);
-        if (!handle)
+        if (!handle) {
+            fprintf(stderr, "Error loading library %s: %s\n", libpath, dlerror());
             return 1;
+        }
 
         /* Look up the operation function */
+        dlerror(); /* Clear any existing error */
         int (*func)(int, int) = (int (*)(int, int))dlsym(handle, op);
-        if (!func) {
+        
+        const char *dlsym_err = dlerror();
+        if (dlsym_err) {
+            fprintf(stderr, "Error finding function %s: %s\n", op, dlsym_err);
             dlclose(handle);
             return 1;
         }
