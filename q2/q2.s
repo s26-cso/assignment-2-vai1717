@@ -46,6 +46,7 @@ main:
     slli a0, a0, 1           # n * 8
     add  a0, a0, s7          # n * 12
     call malloc
+    beqz a0, .done           # Exit safely if malloc fails
 
     mv   s0, a0              # s0 = arr
     add  s1, s0, s7          # s1 = result = arr + n*4
