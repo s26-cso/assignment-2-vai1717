@@ -208,3 +208,4 @@ getAtMost: # Function entry point
 .gam_null: # Missing result handler
     li   a0, -1                # Set return to failure condition
     ret                        # Simply exit
+
