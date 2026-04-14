@@ -183,3 +183,4 @@ main: # Main function entry point
     ld   s7,  8(sp)            # Restore register s7 from stack
     addi sp, sp, 80            # Deallocate 80 bytes from stack
     ret                        # Return control to caller
+
