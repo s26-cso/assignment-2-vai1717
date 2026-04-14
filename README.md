@@ -74,3 +74,4 @@ riscv64-linux-gnu-gcc -static -o q5_prog q5.s
 echo "racecar" > input.txt
 qemu-riscv64 -L /usr/riscv64-linux-gnu ./q5_prog
 ```
+
