@@ -149,11 +149,11 @@ main: # Main function entry point
 .print: # Label for printing loop
     bge  s5, s3, .print_done   # if i >= n, all elements have been printed
 
-    bgtz s5, .print_space      # print space before elements 1..n-1 # Only print spaces between elements
+    bgtz s5, .print_space      # print newline before elements 1..n-1
     j    .print_val            # For first element run straight to printing value
 .print_space: # Label to print space
-    li   a0, ' '               # Load space char into register a0
-    call putchar               # Print a single space character
+    li   a0, '\n'              # Load newline char into register a0 instead of space
+    call putchar               # Print a single newline character
 .print_val: # Label to print value
     la   a0, fmt_d             # Load %d format string into a0 for printf
     slli t0, s5, 2             # Calculate offset for current result item
