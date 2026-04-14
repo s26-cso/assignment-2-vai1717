@@ -213,3 +213,4 @@ main: # Main logic execution point section
     ld   s3,  8(sp)          # Pull away latest active s3 testing variables inside frame
     addi sp, sp, 48          # Release out our fully allocated 48 byte memory chunks
     ret                      # Bounce back program origin structure completely successfully 
+
