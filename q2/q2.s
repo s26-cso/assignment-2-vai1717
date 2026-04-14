@@ -1,25 +1,25 @@
-# q2.s — Next Greater Element (NGE) using a monotonic stack # Name of the file and its purpose: NGE algorithm
-# RV64, LP64 ABI, statically linked with glibc. # Mentions the architecture (RISC-V 64-bit) and linkage
+# q2.s — Next Greater Element (NGE) using a monotonic stack
+# RV64, LP64 ABI, statically linked with glibc.
 #
-# For each element arr[i], output the 0-indexed position of the # Explains that output is the position index
-# first element to its right that is strictly greater. # Explains the core definition of "Next Greater Element"
-# Output -1 if no such element exists. # Explains what to print when there is no greater element
+# For each element arr[i], output the 0-indexed position of the
+# first element to its right that is strictly greater.
+# Output -1 if no such element exists.
 #
-# Input:  command-line args  argv[1..argc-1]  (space-separated ints) # Describes where input comes from
-# Output: space-separated integers on one line, followed by newline. # Describes what output will look like
+# Input:  command-line args  argv[1..argc-1]  (space-separated ints)
+# Output: space-separated integers on one line, followed by newline.
 #
-# Complexity: O(n) time, O(n) space. # Explains algorithmic efficiency
+# Complexity: O(n) time, O(n) space.
 #
-# Algorithm (right-to-left monotonic stack): # Explains the algorithmic strategy used
-#   result = [-1, -1, ..., -1] # Initialise result array with -1
-#   stack  = empty                     // stores indices // Empty stack setup
-#   for i = n-1 downto 0: # Loop from the end of the array to the front
-#       while stack not empty AND arr[stack.top()] <= arr[i]: # Keep popping elements that are smaller or equal
-#           stack.pop() # Remove the element from stack
-#       if stack not empty: # If stack isn't empty, the top is our next greater element
-#           result[i] = stack.top() # Save the index from stack to result
-#       stack.push(i) # Push the current index onto stack
-#   print result # Output the final result answers
+# Algorithm (right-to-left monotonic stack):
+#   result = [-1, -1, ..., -1]
+#   stack  = empty                     // stores indices
+#   for i = n-1 downto 0:
+#       while stack not empty AND arr[stack.top()] <= arr[i]:
+#           stack.pop()
+#       if stack not empty:
+#           result[i] = stack.top()
+#       stack.push(i)
+#   print result
 #
 .section .rodata # Start of read-only data section for constants
 fmt_d:   .string "%d"   # printf format for a single int # String format for printing integers

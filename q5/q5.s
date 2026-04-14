@@ -1,30 +1,30 @@
-# q5.s — Palindrome checker  (O(n) time, O(1) space) # Name of file and algorithm details
-# RV64, LP64 ABI, linked with glibc. # Platform and linkage details
+# q5.s — Palindrome checker  (O(n) time, O(1) space)
+# RV64, LP64 ABI, linked with glibc.
 #
-# Reads "input.txt" from the current directory. # Describes the input file
-# The file contains only lowercase alphabets (and possibly a trailing # Describes expected data
-# newline).  Prints "Yes" if the string is a palindrome, "No" otherwise. # Expected outputs
+# Reads "input.txt" from the current directory.
+# The file contains only lowercase alphabets (and possibly a trailing
+# newline).  Prints "Yes" if the string is a palindrome, "No" otherwise.
 #
-# Strategy (two-pointer, O(1) space): # Explain dual-pointer reading mechanism
-#   Open the file twice to get two independent file-position cursors. # Uses two independent OS file handles
-#   fd_left  reads sequentially from position 0 forward. # One reader scans strictly forward
-#   fd_right seeks backwards from the last content byte. # One reader jumps sequentially backward
-#   Compare fd_left[i] with fd_right[n-1-i] for i = 0,1,... # Validates mirror similarity 
-#   Stop when the two pointers meet or cross. # Halts early upon verifying entire structure matches
+# Strategy (two-pointer, O(1) space):
+#   Open the file twice to get two independent file-position cursors.
+#   fd_left  reads sequentially from position 0 forward.
+#   fd_right seeks backwards from the last content byte.
+#   Compare fd_left[i] with fd_right[n-1-i] for i = 0,1,...
+#   Stop when the two pointers meet or cross.
 #
-# System calls used (via glibc wrappers): # Exposes the OS functions
-#   open, lseek, read, close, puts # Five different UNIX standard I/O functions
+# System calls used (via glibc wrappers):
+#   open, lseek, read, close, puts
 #
-# Stack frame layout (sp after prologue): # Explain exact memory layout required on stack
-#   sp+ 0 : 1-byte buffer for left  char # Reserved a single byte for Left pointer's reading
-#   sp+ 1 : 1-byte buffer for right char # Reserved a single byte for Right pointer's reading
-#   sp+ 2 : (6 bytes padding for alignment) # Used up remaining space in first block
-#   sp+ 8 : saved s3 # Backup space for standard s-registers
-#   sp+16 : saved s2 # Backup space for standard s-registers
-#   sp+24 : saved s1 # Backup space for standard s-registers
-#   sp+32 : saved s0 # Backup space for standard s-registers
-#   sp+40 : saved ra # Backup space for return address
-#   (frame size = 48, 16-byte aligned) # Frame summary
+# Stack frame layout (sp after prologue):
+#   sp+ 0 : 1-byte buffer for left  char
+#   sp+ 1 : 1-byte buffer for right char
+#   sp+ 2 : (6 bytes padding for alignment)
+#   sp+ 8 : saved s3
+#   sp+16 : saved s2
+#   sp+24 : saved s1
+#   sp+32 : saved s0
+#   sp+40 : saved ra
+#   (frame size = 48, 16-byte aligned)
 
 .section .rodata # Begin Read-Only memory section defined here
 path_str:   .string "input.txt" # Define string literal for input.txt target filename

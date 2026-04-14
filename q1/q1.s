@@ -1,10 +1,18 @@
-
-# LP64 calling convention: # Explaining standard RISC-V conventions used
-#   Arguments:            a0–a7 # Argument registers
-#   Return value:         a0 # Return value register
-#   Caller-saved (temp):  t0–t6, a0–a7 # Registers that don't need to be preserved
-#   Callee-saved:         ra, sp, s0–s11 # Registers that must be saved and restored
-#   Stack alignment:      16 bytes at every call site # Stack pointer alignment rule
+# q1.s — Binary Search Tree in RISC-V 64-bit assembly (RV64, LP64 ABI)
+#
+# struct Node {
+#     int val;            // offset  0  (4 bytes)
+#     // 4 bytes implicit padding for pointer alignment
+#     struct Node* left;  // offset  8  (8 bytes)
+#     struct Node* right; // offset 16  (8 bytes)
+# };                      // sizeof = 24
+#
+# LP64 calling convention:
+#   Arguments:            a0–a7
+#   Return value:         a0
+#   Caller-saved (temp):  t0–t6, a0–a7
+#   Callee-saved:         ra, sp, s0–s11
+#   Stack alignment:      16 bytes at every call site
 
 .text # Identifies this section as executable code
 

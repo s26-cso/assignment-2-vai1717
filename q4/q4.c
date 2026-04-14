@@ -1,4 +1,23 @@
-
+/*
+ * q4.c — Dynamic-library calculator for ISS-6701
+ *
+ * Protocol:
+ *   Input (loop on stdin):  <op> <num1> <num2>
+ *   Output:                 result of op(num1, num2)
+ *
+ * For each operation <op>:
+ *   - Load ./lib<op>.so using dlopen (RTLD_LAZY)
+ *   - Resolve symbol <op> of type  int (*)(int, int)  via dlsym
+ *   - Call it, print the integer result, then dlclose immediately
+ *
+ * Memory safety:
+ *   Each library can be up to 1.5 GB; the 2 GB cap means we MUST
+ *   dlclose before loading the next one.  We never hold more than
+ *   one library open at a time.
+ *
+ * Compile (autograder):
+ *   riscv64-linux-gnu-gcc -o a.out q4.c -ldl
+ */
 
 #include <stdio.h> // Includes standard I/O library for printing and scanning
 #include <dlfcn.h> // Includes dynamic linking library for opening and using shared objects
