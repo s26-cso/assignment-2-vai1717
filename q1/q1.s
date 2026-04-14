@@ -1,12 +1,4 @@
-# q1.s — Binary Search Tree in RISC-V 64-bit assembly (RV64, LP64 ABI) # Name and description of file
-#
-# struct Node { # Defines the structure of our Binary Search Tree Node in C context
-#     int val;            // offset  0  (4 bytes) # Integer value holding node data
-#     // 4 bytes implicit padding for pointer alignment # C struct padding implicitly added to 8 byte align
-#     struct Node* left;  // offset  8  (8 bytes) # Pointer to the left child node
-#     struct Node* right; // offset 16  (8 bytes) # Pointer to the right child node
-# };                      // sizeof = 24 # Total memory size required for one Node
-#
+
 # LP64 calling convention: # Explaining standard RISC-V conventions used
 #   Arguments:            a0–a7 # Argument registers
 #   Return value:         a0 # Return value register
@@ -166,7 +158,7 @@ get: # Function entry point
 #   The "go left" path is a pure tail call (no candidate yet – or # Design comment for memory saving
 #   a better candidate lives to the left, which is impossible since # Additional description of the edgecase logic
 #   root->val would already exceed val). # More recursive logic tracing
-
+# ───────────────────────────────────────────────────────────────── # Section divider
 getAtMost: # Function entry point
     beqz a1, .gam_null         # root == NULL → -1 # Empty node check
 
