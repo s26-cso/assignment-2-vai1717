@@ -1,170 +1,187 @@
-# q2.s — Next Greater Element (monotonic stack, O(n) time/space)
-# RV64, LP64 ABI, linked with glibc
+# q2.s — Next Greater Element (NGE) using a monotonic stack
+# RV64, LP64 ABI, statically linked with glibc.
 #
-# For each element in the array, find the 0-indexed position of the
-# next greater element to its right.  Print -1 if none exists.
+# For each element arr[i], output the 0-indexed position of the
+# first element to its right that is strictly greater.
+# Output -1 if no such element exists.
 #
-# Input:  command-line arguments (space-separated integers)
-# Output: space-separated positions (or -1), one line
+# Input:  command-line args  argv[1..argc-1]  (space-separated ints)
+# Output: space-separated integers on one line, followed by newline.
 #
-# Algorithm (from pseudocode):
-#   stack = empty ;  result = [-1, -1, ..., -1]
+# Complexity: O(n) time, O(n) space.
+#
+# Algorithm (right-to-left monotonic stack):
+#   result = [-1, -1, ..., -1]
+#   stack  = empty                     // stores indices
 #   for i = n-1 downto 0:
-#       while !stack.empty() && arr[stack.top()] <= arr[i]:  stack.pop()
-#       if !stack.empty():  result[i] = stack.top()
+#       while stack not empty AND arr[stack.top()] <= arr[i]:
+#           stack.pop()
+#       if stack not empty:
+#           result[i] = stack.top()
 #       stack.push(i)
+#   print result
 
 .section .rodata
-fmt_int:
-    .string "%d"
+fmt_d:   .string "%d"   # printf format for a single int
 
 .text
 .globl main
 
+# Register allocation:
+#   s0 = arr    (int*)            — input values, 4 bytes each
+#   s1 = result (int*)            — output answers, 4 bytes each
+#   s2 = stk    (int*)            — monotonic stack of indices
+#   s3 = n                        — number of elements
+#   s4 = stk_top                  — current stack depth (0 = empty)
+#   s5 = i                        — loop counter
+#   s6 = base of argv[1]          — &argv[1], pointer arithmetic in 8-byte steps
+#   s7 = n*4 (byte stride for int arrays)
 main:
-    # ---- Prologue ----
-    addi sp, sp, -80
-    sd   ra, 72(sp)
-    sd   s0, 64(sp)          # s0 = arr  (int*)
-    sd   s1, 56(sp)          # s1 = result (int*)
-    sd   s2, 48(sp)          # s2 = stk  (int*)  — stack array
-    sd   s3, 40(sp)          # s3 = n
-    sd   s4, 32(sp)          # s4 = stk_top
-    sd   s5, 24(sp)          # s5 = loop counter i
-    sd   s6, 16(sp)          # s6 = argv+8  (pointer to argv[1])
-    sd   s7, 8(sp)           # s7 = scratch
+    # ── prologue ──────────────────────────────────────────────────
+    addi sp, sp, -64
+    sd   ra, 56(sp)
+    sd   s0, 48(sp)
+    sd   s1, 40(sp)
+    sd   s2, 32(sp)
+    sd   s3, 24(sp)
+    sd   s4, 16(sp)
+    sd   s5,  8(sp)
+    sd   s6,  0(sp)
+    # s7 stored in the slot we reuse after saving — add more space or use stack slot
+    addi sp, sp, -8
+    sd   s7, 0(sp)
 
-    # a0 = argc,  a1 = argv
-    addi s3, a0, -1          # s3 = n = argc - 1
-    addi s6, a1, 8           # s6 = &argv[1]
+    # a0=argc, a1=argv
+    addi s3, a0, -1            # n = argc - 1  (number of elements)
+    addi s6, a1, 8             # s6 = &argv[1]
 
-    blez s3, .done           # if n <= 0, nothing to do
+    blez s3, .exit_ok          # n <= 0: nothing to print
 
-    # ---- Allocate arr[n] + result[n] + stk[n] = 12·n bytes ----
-    slli a0, s3, 2           # n * 4
-    mv   s7, a0             # save n*4
-    slli a0, a0, 1           # n * 8
-    add  a0, a0, s7          # n * 12
+    # ── allocate three int arrays: arr, result, stk ───────────────
+    # Total: n * 4 * 3 = n * 12 bytes
+    slli s7, s3, 2             # s7 = n * 4
+    slli t0, s3, 2
+    slli t1, t0, 1
+    add  a0, t0, t1            # a0 = n*4 + n*8 = n*12
     call malloc
-    beqz a0, .done           # Exit safely if malloc fails
+    beqz a0, .exit_ok          # malloc failed → exit gracefully
 
-    mv   s0, a0              # s0 = arr
-    add  s1, s0, s7          # s1 = result = arr + n*4
-    add  s2, s1, s7          # s2 = stk    = result + n*4
+    mv   s0, a0                # arr    starts at a0
+    add  s1, s0, s7            # result starts at arr + n*4
+    add  s2, s1, s7            # stk    starts at result + n*4
 
-    # ---- Parse argv[1..n] into arr[] ----
-    li   s5, 0               # i = 0
-.parse_loop:
-    bge  s5, s3, .parse_done
-    slli t0, s5, 3           # i * 8  (pointer size)
-    add  t0, s6, t0          # &argv[i+1]
-    ld   a0, 0(t0)           # argv[i+1]
-    call atoi                # a0 = integer value
-    slli t0, s5, 2           # i * 4
-    add  t0, s0, t0          # &arr[i]
-    sw   a0, 0(t0)           # arr[i] = value
-    addi s5, s5, 1
-    j    .parse_loop
-.parse_done:
-
-    # ---- Initialise result[] to -1 ----
+    # ── parse argv[1..n] → arr[] ──────────────────────────────────
     li   s5, 0
-    li   t1, -1
-.init_loop:
-    bge  s5, s3, .init_done
+.parse:
+    bge  s5, s3, .parse_end
+    slli t0, s5, 3             # i * 8 (pointer width)
+    add  t0, s6, t0            # &argv[i+1]
+    ld   a0, 0(t0)             # argv[i+1] (char*)
+    call atoi                  # a0 = integer
+    slli t0, s5, 2             # i * 4 (int width)
+    add  t0, s0, t0
+    sw   a0, 0(t0)             # arr[i] = value
+    addi s5, s5, 1
+    j    .parse
+.parse_end:
+
+    # ── initialise result[] to -1 ─────────────────────────────────
+    li   s5, 0
+    li   t2, -1
+.init:
+    bge  s5, s3, .init_end
     slli t0, s5, 2
     add  t0, s1, t0
-    sw   t1, 0(t0)           # result[i] = -1
+    sw   t2, 0(t0)             # result[i] = -1
     addi s5, s5, 1
-    j    .init_loop
-.init_done:
+    j    .init
+.init_end:
 
-    # ---- Monotonic-stack algorithm ----
-    li   s4, 0               # stk_top = 0 (stack is empty)
-    addi s5, s3, -1          # i = n - 1
+    # ── monotonic stack: right-to-left ────────────────────────────
+    li   s4, 0                 # stk_top = 0 (stack empty)
+    addi s5, s3, -1            # i = n - 1
 
-.algo_loop:
-    bltz s5, .algo_done      # if i < 0, finished
+.nge_loop:
+    bltz s5, .nge_done
 
     # t1 = arr[i]
     slli t0, s5, 2
     add  t0, s0, t0
-    lw   t1, 0(t0)
+    lw   t1, 0(t0)             # t1 = arr[i]  (sign-extended)
 
-.pop_loop:
-    beqz s4, .pop_done       # stack empty → stop popping
-    # t3 = stk[stk_top - 1]  (top index)
+    # pop indices whose values are <= arr[i]
+.pop:
+    beqz s4, .pop_done         # stack empty
     addi t2, s4, -1
     slli t2, t2, 2
     add  t2, s2, t2
-    lw   t3, 0(t2)           # t3 = top-of-stack index
-    # t4 = arr[t3]
+    lw   t3, 0(t2)             # t3 = stk[top-1]  (an index)
     slli t4, t3, 2
     add  t4, s0, t4
-    lw   t4, 0(t4)           # t4 = arr[stack.top()]
-    bgt  t4, t1, .pop_done   # arr[stack.top()] > arr[i] → stop
-    addi s4, s4, -1          # pop
-    j    .pop_loop
+    lw   t4, 0(t4)             # t4 = arr[t3]     (a value)
+    bgt  t4, t1, .pop_done     # arr[stk.top] > arr[i] → stop popping
+    addi s4, s4, -1
+    j    .pop
 .pop_done:
 
-    # if stack not empty, result[i] = stack.top()
-    beqz s4, .skip_result
+    # if stack not empty, result[i] = stk.top()
+    beqz s4, .no_result
     addi t2, s4, -1
     slli t2, t2, 2
     add  t2, s2, t2
-    lw   t3, 0(t2)           # t3 = stack.top()
+    lw   t3, 0(t2)             # t3 = stk.top() index
     slli t0, s5, 2
     add  t0, s1, t0
-    sw   t3, 0(t0)           # result[i] = stack.top()
-.skip_result:
+    sw   t3, 0(t0)             # result[i] = t3
+.no_result:
 
-    # stack.push(i)
+    # stk.push(i)
     slli t0, s4, 2
     add  t0, s2, t0
-    sw   s5, 0(t0)           # stk[stk_top] = i
-    addi s4, s4, 1           # stk_top++
+    sw   s5, 0(t0)             # stk[stk_top] = i
+    addi s4, s4, 1
 
-    addi s5, s5, -1          # i--
-    j    .algo_loop
-.algo_done:
+    addi s5, s5, -1
+    j    .nge_loop
+.nge_done:
 
-    # ---- Print results ----
-    li   s5, 0               # i = 0
-.print_loop:
+    # ── print result[] space-separated, then newline ──────────────
+    li   s5, 0
+.print:
     bge  s5, s3, .print_done
 
-    # print space before every element except the first
-    beqz s5, .no_space
-    li   a0, 32              # ' '
+    bgtz s5, .print_space      # print space before elements 1..n-1
+    j    .print_val
+.print_space:
+    li   a0, ' '
     call putchar
-.no_space:
-    # printf("%d", result[i])
-    la   a0, fmt_int
+.print_val:
+    la   a0, fmt_d
     slli t0, s5, 2
     add  t0, s1, t0
-    lw   a1, 0(t0)           # result[i]
+    lw   a1, 0(t0)             # result[i]  (sign-extended for printf %d)
     call printf
 
     addi s5, s5, 1
-    j    .print_loop
+    j    .print
 .print_done:
 
-    # trailing newline
-    li   a0, 10              # '\n'
+    li   a0, '\n'
     call putchar
 
-.done:
-    li   a0, 0               # return 0
+.exit_ok:
+    li   a0, 0                 # return 0
 
-    # ---- Epilogue ----
-    ld   ra, 72(sp)
-    ld   s0, 64(sp)
-    ld   s1, 56(sp)
-    ld   s2, 48(sp)
-    ld   s3, 40(sp)
-    ld   s4, 32(sp)
-    ld   s5, 24(sp)
-    ld   s6, 16(sp)
-    ld   s7, 8(sp)
-    addi sp, sp, 80
+    # ── epilogue ─────────────────────────────────────────────────
+    ld   s7, 0(sp)
+    addi sp, sp, 8
+    ld   ra, 56(sp)
+    ld   s0, 48(sp)
+    ld   s1, 40(sp)
+    ld   s2, 32(sp)
+    ld   s3, 24(sp)
+    ld   s4, 16(sp)
+    ld   s5,  8(sp)
+    ld   s6,  0(sp)
+    addi sp, sp, 64
     ret
