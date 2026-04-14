@@ -1,18 +1,18 @@
 # q1.s — Binary Search Tree in RISC-V 64-bit assembly (RV64, LP64 ABI)
 #
 # struct Node {
-#     int val;            // offset 0  (4 bytes)
-#     // 4 bytes padding for alignment
-#     struct Node* left;  // offset 8  (8 bytes)
-#     struct Node* right; // offset 16 (8 bytes)
-# };
-# sizeof(struct Node) = 24
+#     int val;            // offset  0  (4 bytes)
+#     // 4 bytes implicit padding for pointer alignment
+#     struct Node* left;  // offset  8  (8 bytes)
+#     struct Node* right; // offset 16  (8 bytes)
+# };                      // sizeof = 24
 #
-# Calling convention (LP64):
-#   Arguments:  a0-a7
-#   Return:     a0
-#   Callee-saved: ra, sp, s0-s11
-#   Caller-saved: t0-t6, a0-a7
+# LP64 calling convention:
+#   Arguments:            a0–a7
+#   Return value:         a0
+#   Caller-saved (temp):  t0–t6, a0–a7
+#   Callee-saved:         ra, sp, s0–s11
+#   Stack alignment:      16 bytes at every call site
 
 .text
 
@@ -21,166 +21,190 @@
 .globl get
 .globl getAtMost
 
-# ============================================================
+# ─────────────────────────────────────────────────────────────────
 # struct Node* make_node(int val)
-#   a0 = val (int, sign-extended to 64 bits)
-#   Returns: pointer to newly allocated Node in a0
-# ============================================================
+#
+#   a0 = val (int – sign-extended from 32 to 64 bits by convention)
+#   Returns new Node* in a0.
+#
+#   Does:
+#     node = malloc(24)
+#     node->val   = val    (sw – 32-bit store)
+#     node->left  = NULL   (sd zero)
+#     node->right = NULL   (sd zero)
+#     return node
+# ─────────────────────────────────────────────────────────────────
 make_node:
     addi sp, sp, -16
-    sd   ra, 8(sp)
-    sd   s0, 0(sp)
+    sd   ra,  8(sp)
+    sd   s0,  0(sp)
 
-    mv   s0, a0            # s0 = val (preserve across malloc call)
+    mv   s0, a0            # s0 = val (caller-saved across malloc)
 
-    li   a0, 24            # sizeof(Node) = 24
-    call malloc             # a0 = pointer to new node
+    li   a0, 24            # sizeof(struct Node)
+    call malloc            # a0 = new Node*
 
-    sw   s0, 0(a0)         # node->val = val
-    sd   zero, 8(a0)       # node->left = NULL
-    sd   zero, 16(a0)      # node->right = NULL
+    sw   s0,  0(a0)        # node->val   = val  (32-bit int)
+    sd   zero, 8(a0)       # node->left  = NULL
+    sd   zero,16(a0)       # node->right = NULL
 
-    ld   ra, 8(sp)
-    ld   s0, 0(sp)
+    ld   ra,  8(sp)
+    ld   s0,  0(sp)
     addi sp, sp, 16
     ret
 
-# ============================================================
+# ─────────────────────────────────────────────────────────────────
 # struct Node* insert(struct Node* root, int val)
-#   a0 = root, a1 = val
-#   Returns: root in a0
 #
-# Equivalent C:
-#   if (root == NULL) return make_node(val);
-#   if (val < root->val)
-#       root->left = insert(root->left, val);
-#   else if (val > root->val)
-#       root->right = insert(root->right, val);
-#   return root;
-# ============================================================
+#   a0 = root (Node* – may be NULL)
+#   a1 = val  (int)
+#   Returns (possibly new) root in a0.
+#
+#   Algorithm (standard recursive BST insert, no duplicate values):
+#     if root == NULL  → return make_node(val)
+#     if val < root->val → root->left  = insert(root->left,  val)
+#     if val > root->val → root->right = insert(root->right, val)
+#     else               → (duplicate: do nothing)
+#     return root
+# ─────────────────────────────────────────────────────────────────
 insert:
-    beqz a0, .insert_null          # if root == NULL, create new node
+    beqz a0, .insert_null      # NULL root → tail-call make_node(val)
 
     addi sp, sp, -32
     sd   ra, 24(sp)
     sd   s0, 16(sp)
-    sd   s1, 8(sp)
+    sd   s1,  8(sp)
 
-    mv   s0, a0                    # s0 = root
-    mv   s1, a1                    # s1 = val
+    mv   s0, a0                # s0 = root (preserved across recursive call)
+    mv   s1, a1                # s1 = val
 
-    lw   t0, 0(s0)                 # t0 = root->val (sign-extended)
-    blt  s1, t0, .insert_left     # if val < root->val, go left
-    bgt  s1, t0, .insert_right    # if val > root->val, go right
-    j    .insert_done              # val == root->val, no duplicate insert
+    lw   t0, 0(s0)             # t0 = root->val  (32-bit, sign-extended)
+    blt  s1, t0, .ins_left     # val < root->val → recurse left
+    bgt  s1, t0, .ins_right    # val > root->val → recurse right
+    j    .ins_done             # val == root->val → duplicate, skip
 
-.insert_left:
-    ld   a0, 8(s0)                 # a0 = root->left
-    mv   a1, s1                    # a1 = val
+.ins_left:
+    ld   a0, 8(s0)             # a0 = root->left
+    mv   a1, s1
     call insert
-    sd   a0, 8(s0)                 # root->left = insert(root->left, val)
-    j    .insert_done
+    sd   a0, 8(s0)             # root->left = returned subtree root
+    j    .ins_done
 
-.insert_right:
-    ld   a0, 16(s0)                # a0 = root->right
-    mv   a1, s1                    # a1 = val
+.ins_right:
+    ld   a0, 16(s0)            # a0 = root->right
+    mv   a1, s1
     call insert
-    sd   a0, 16(s0)                # root->right = insert(root->right, val)
+    sd   a0, 16(s0)            # root->right = returned subtree root
 
-.insert_done:
-    mv   a0, s0                    # return root
+.ins_done:
+    mv   a0, s0                # return original root (unchanged)
     ld   ra, 24(sp)
     ld   s0, 16(sp)
-    ld   s1, 8(sp)
+    ld   s1,  8(sp)
     addi sp, sp, 32
     ret
 
 .insert_null:
-    mv   a0, a1                    # a0 = val
-    tail make_node                 # return make_node(val)  [tail call, no stack needed]
+    # root is NULL: create a new leaf node and return it.
+    # val is still in a1; move it to a0 as argument for make_node.
+    mv   a0, a1
+    tail make_node             # tail call – no extra stack frame needed
 
-# ============================================================
+# ─────────────────────────────────────────────────────────────────
 # struct Node* get(struct Node* root, int val)
-#   a0 = root, a1 = val
-#   Returns: pointer to node with value val, or NULL
 #
-# Iterative implementation (BST search is naturally tail-recursive):
-#   while (root != NULL) {
-#       if (val == root->val) return root;
-#       if (val < root->val) root = root->left;
-#       else root = root->right;
-#   }
-#   return NULL;
-# ============================================================
+#   a0 = root, a1 = val
+#   Returns Node* if found, NULL otherwise.
+#
+#   Implemented iteratively (no recursion, no stack allocation):
+#     while (root != NULL):
+#         if val == root->val  → return root
+#         if val <  root->val  → root = root->left
+#         else                 → root = root->right
+#     return NULL
+# ─────────────────────────────────────────────────────────────────
 get:
 .get_loop:
-    beqz a0, .get_not_found        # if root == NULL, return NULL
-    lw   t0, 0(a0)                 # t0 = root->val
-    beq  a1, t0, .get_found        # if val == root->val, found it
-    blt  a1, t0, .get_go_left      # if val < root->val, go left
-    ld   a0, 16(a0)                # root = root->right
+    beqz a0, .get_null         # root == NULL → not found
+    lw   t0, 0(a0)             # t0 = root->val
+    beq  a1, t0, .get_done     # found
+    blt  a1, t0, .get_left     # val < root->val → go left
+
+    ld   a0, 16(a0)            # root = root->right
     j    .get_loop
 
-.get_go_left:
-    ld   a0, 8(a0)                 # root = root->left
+.get_left:
+    ld   a0, 8(a0)             # root = root->left
     j    .get_loop
 
-.get_found:
-    ret                            # a0 already = root (the found node)
+.get_done:
+    ret                        # a0 already = found node
 
-.get_not_found:
-    li   a0, 0                     # return NULL
+.get_null:
+    li   a0, 0                 # return NULL
     ret
 
-# ============================================================
+# ─────────────────────────────────────────────────────────────────
 # int getAtMost(int val, struct Node* root)
-#   a0 = val, a1 = root       *** NOTE: argument order differs ***
-#   Returns: greatest value in tree that is <= val, or -1
 #
-# Equivalent C:
-#   if (root == NULL) return -1;
-#   if (root->val == val) return val;
-#   if (root->val > val) return getAtMost(val, root->left);
-#   // root->val < val: root is a candidate
-#   int result = getAtMost(val, root->right);
-#   if (result == -1) return root->val;
-#   return result;
-# ============================================================
+#   a0 = val  (int – the upper bound)
+#   a1 = root (Node*)
+#   Returns greatest value v in the tree such that v <= val,
+#   or -1 if no such value exists.
+#
+#   NOTE: argument order is (val, root) not (root, val)!
+#
+#   Algorithm:
+#     if root == NULL          → return -1
+#     if root->val == val      → return val           (exact match)
+#     if root->val >  val      → return getAtMost(val, root->left)   [tail]
+#     // root->val < val: root->val is a candidate
+#     result = getAtMost(val, root->right)
+#     return (result == -1) ? root->val : result
+#
+#   Important: when we go right, we save root->val as the fallback.
+#   The "go left" path is a pure tail call (no candidate yet – or
+#   a better candidate lives to the left, which is impossible since
+#   root->val would already exceed val).
+# ─────────────────────────────────────────────────────────────────
 getAtMost:
-    beqz a1, .gam_null             # if root == NULL, return -1
+    beqz a1, .gam_null         # root == NULL → -1
 
-    lw   t0, 0(a1)                 # t0 = root->val (sign-extended)
-    beq  t0, a0, .gam_exact        # root->val == val: return val
-    bgt  t0, a0, .gam_go_left      # root->val > val: go left (tail call)
+    lw   t0, 0(a1)             # t0 = root->val (sign-extended to 64)
+    beq  t0, a0, .gam_exact    # root->val == val → return val
+    bgt  t0, a0, .gam_left     # root->val >  val → tail-recurse left
 
-    # root->val < val: root is a candidate, try right subtree
+    # root->val < val: this node is a candidate; try right subtree
     addi sp, sp, -16
     sd   ra, 8(sp)
     sd   s0, 0(sp)
 
-    mv   s0, t0                    # s0 = candidate value (root->val)
-    ld   a1, 16(a1)                # a1 = root->right
+    mv   s0, t0                # s0 = candidate = root->val
+    ld   a1, 16(a1)            # a1 = root->right
     # a0 = val (unchanged)
-    call getAtMost
+    call getAtMost             # result in a0
 
-    li   t0, -1
-    bne  a0, t0, .gam_return       # if result != -1, return it (already in a0)
-    mv   a0, s0                    # else return candidate (root->val)
+    li   t1, -1
+    bne  a0, t1, .gam_ret     # right subtree had a closer value → use it
 
-.gam_return:
+    mv   a0, s0                # right subtree had nothing → use candidate
+
+.gam_ret:
     ld   ra, 8(sp)
     ld   s0, 0(sp)
     addi sp, sp, 16
     ret
 
-.gam_go_left:
-    ld   a1, 8(a1)                 # root = root->left
-    j    getAtMost                 # tail call (no stack frame needed)
+.gam_left:
+    # root->val > val: the answer (if any) is in the left subtree.
+    # Pure tail call – reuse current ra/frame.
+    ld   a1, 8(a1)             # a1 = root->left
+    j    getAtMost
 
 .gam_exact:
-    # a0 already contains val (which equals root->val)
+    # a0 == val already; the node stores exactly val.
     ret
 
 .gam_null:
-    li   a0, -1                    # return -1
+    li   a0, -1
     ret
