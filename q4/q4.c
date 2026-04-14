@@ -1,10 +1,22 @@
 /*
- * q4.c — Dynamic-library calculator
+ * q4.c — Dynamic-library calculator for ISS-6701
  *
- * Reads lines of the form:  <op> <num1> <num2>
- * Loads ./lib<op>.so at runtime, calls the function <op>(num1, num2),
- * prints the result, and immediately unloads the library to stay
- * under the 2 GB memory limit (each .so can be up to 1.5 GB).
+ * Protocol:
+ *   Input (loop on stdin):  <op> <num1> <num2>
+ *   Output:                 result of op(num1, num2)
+ *
+ * For each operation <op>:
+ *   - Load ./lib<op>.so using dlopen (RTLD_LAZY)
+ *   - Resolve symbol <op> of type  int (*)(int, int)  via dlsym
+ *   - Call it, print the integer result, then dlclose immediately
+ *
+ * Memory safety:
+ *   Each library can be up to 1.5 GB; the 2 GB cap means we MUST
+ *   dlclose before loading the next one.  We never hold more than
+ *   one library open at a time.
+ *
+ * Compile (autograder):
+ *   riscv64-linux-gnu-gcc -o a.out q4.c -ldl
  */
 
 #include <stdio.h>
@@ -12,38 +24,38 @@
 
 int main(void)
 {
-    char op[8];          /* op is at most 5 characters + NUL */
+    char op[8];     /* op ≤ 5 chars + NUL; 8 bytes for safety */
     int  num1, num2;
 
-    /* Securely read up to 5 characters for the operation */
+    /* Read one line at a time; stop at EOF or malformed input */
     while (scanf("%5s %d %d", op, &num1, &num2) == 3) {
 
-        /* Build library path: ./lib<op>.so */
-        char libpath[24];                       /* ./lib + 5 + .so + NUL = 14 max */
+        /* ---- Build path ---- */
+        char libpath[20];   /* "./lib" + 5 + ".so" + NUL = 15 max */
         snprintf(libpath, sizeof libpath, "./lib%s.so", op);
 
-        /* Load the shared library */
+        /* ---- Load ---- */
         void *handle = dlopen(libpath, RTLD_LAZY);
         if (!handle) {
-            fprintf(stderr, "Error loading library %s: %s\n", libpath, dlerror());
-            return 1;
+            /* Library not found — skip this line, keep going */
+            fprintf(stderr, "dlopen: %s\n", dlerror());
+            continue;
         }
 
-        /* Look up the operation function */
-        dlerror(); /* Clear any existing error */
+        /* ---- Resolve ---- */
+        dlerror();  /* clear stale error */
         int (*func)(int, int) = (int (*)(int, int))dlsym(handle, op);
-        
-        const char *dlsym_err = dlerror();
-        if (dlsym_err) {
-            fprintf(stderr, "Error finding function %s: %s\n", op, dlsym_err);
+        const char *err = dlerror();
+        if (err) {
+            fprintf(stderr, "dlsym: %s\n", err);
             dlclose(handle);
-            return 1;
+            continue;
         }
 
-        /* Call and print */
+        /* ---- Execute & print ---- */
         printf("%d\n", func(num1, num2));
 
-        /* Unload immediately — critical for the 2 GB memory cap */
+        /* ---- Unload immediately (memory constraint) ---- */
         dlclose(handle);
     }
 
