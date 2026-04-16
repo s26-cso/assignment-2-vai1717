@@ -144,9 +144,9 @@ main: # Main function entry point
     j    .nge_loop             # Loop for next integer
 .nge_done: # Label for when the full next-greater-element loop is finished
 
-    # ── print result[] space-separated, then newline ────────────── # Output section starts
+    # ── print result[] one-per-line ─────────────────────────────── # Output section starts
     li   s5, 0                 # reset loop counter s5 (i) to 0
-print: # Label for printing loop
+.print: # Label for printing loop
     bge  s5, s3, .print_done   # if i >= n, all elements have been printed
     la   a0, fmt_d             # Load %d format string into a0 for printf
     slli t0, s5, 2             # Calculate offset for current result item
@@ -155,17 +155,6 @@ print: # Label for printing loop
     call printf                # Call printf to print the result integer
     li   a0, '\n'              # Print a newline after each integer
     call putchar
-    addi s5, s5, 1             # i++ # Move to next index
-    j    print                # Loop to next element
-.print_done: # Label indicating all results printed
-    la   a0, fmt_d             # Load %d format string into a0 for printf
-    slli t0, s5, 2             # Calculate offset for current result item
-    add  t0, s1, t0            # Find address in result array
-    lw   a1, 0(t0)             # result[i]  (sign-extended for printf %d) # Load result value into a1
-    call printf                # Call printf to print the result integer
-    li   a0, '\n'              # Print a newline after each integer
-    call putchar
-
     addi s5, s5, 1             # i++ # Move to next index
     j    .print                # Loop to next element
 .print_done: # Label indicating all results printed
