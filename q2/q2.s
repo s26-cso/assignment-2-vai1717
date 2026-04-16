@@ -146,27 +146,30 @@ main: # Main function entry point
 
     # ── print result[] space-separated, then newline ────────────── # Output section starts
     li   s5, 0                 # reset loop counter s5 (i) to 0
-.print: # Label for printing loop
+print: # Label for printing loop
     bge  s5, s3, .print_done   # if i >= n, all elements have been printed
-
-    bgtz s5, .print_space      # print newline before elements 1..n-1
-    j    .print_val            # For first element run straight to printing value
-.print_space: # Label to print space
-    li   a0, '\n'              # Load newline char into register a0 instead of space
-    call putchar               # Print a single newline character
-.print_val: # Label to print value
     la   a0, fmt_d             # Load %d format string into a0 for printf
     slli t0, s5, 2             # Calculate offset for current result item
     add  t0, s1, t0            # Find address in result array
     lw   a1, 0(t0)             # result[i]  (sign-extended for printf %d) # Load result value into a1
     call printf                # Call printf to print the result integer
+    li   a0, '\n'              # Print a newline after each integer
+    call putchar
+    addi s5, s5, 1             # i++ # Move to next index
+    j    print                # Loop to next element
+.print_done: # Label indicating all results printed
+    la   a0, fmt_d             # Load %d format string into a0 for printf
+    slli t0, s5, 2             # Calculate offset for current result item
+    add  t0, s1, t0            # Find address in result array
+    lw   a1, 0(t0)             # result[i]  (sign-extended for printf %d) # Load result value into a1
+    call printf                # Call printf to print the result integer
+    li   a0, '\n'              # Print a newline after each integer
+    call putchar
 
     addi s5, s5, 1             # i++ # Move to next index
     j    .print                # Loop to next element
 .print_done: # Label indicating all results printed
 
-    li   a0, '\n'              # Load newline char into register a0
-    call putchar               # Print a newline character
 
 .exit_ok: # Label for successful exit path
     li   a0, 0                 # return 0 # Set return code to 0
